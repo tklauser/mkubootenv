@@ -1,4 +1,19 @@
 /*
+ * mkubootenv.c
+ *
+ * Create a U-Boot environment image suitable for flashing.
+ *
+ * The input is a text file containing environment variable
+ * definitions in the following format (variables separated by
+ * newline):
+ *
+ * baudrate=115200
+ * bootdelay=5
+ * ethaddr=00:15:12:00:00:01
+ * kernel_addr=4050000
+ * boot_ram=bootm ${kernel_addr}
+ * bootcmd=run boot_ram
+ *
  * Copyright (c) 2009, Zurich University of Applied Science
  * Copyright (c) 2009, Tobias Klauser <klto@zhaw.ch>
  *
@@ -131,7 +146,8 @@ int main(int argc, char **argv)
 	 *	var=value\n
 	 */
 
-	/* check whether the size hasn't been set or whether the source file +
+	/*
+	 * check whether the size hasn't been set or whether the source file +
 	 * CRC + trailer fits into the specified size.
 	 */
 	min_img_size = CRC32_SIZE + s.sbuf.st_size + TRAILER_SIZE;
@@ -151,7 +167,10 @@ int main(int argc, char **argv)
 		goto err_out_munmap_s;
 	}
 
-	/* seek to the end of the target file to write a byte */
+	/*
+	 * seek to the end of the target file to write a byte, so we have the
+	 * whole target image size mapped for writing
+	 */
 	if (lseek(t.fd, img_size - 1, SEEK_SET) < 0) {
 		err("Can't seek in target image file '%s': %s\n", t.name,
 				strerror(errno));
@@ -176,17 +195,14 @@ int main(int argc, char **argv)
 	dbg("size:              %zd\n", img_size);
 
 	/* CRC32 placeholder, will be filled later */
-	dbg("writing crc...\n");
+	dbg("writing crc dummy...\n");
 	for (p = t.ptr; p < t.ptr + CRC32_SIZE; p++)
 		*p = 0;
 
 	/* copy the source file, replacing \n by \0 */
 	dbg("writing data...\n");
-	for (q = s.ptr; q < s.ptr + s.sbuf.st_size; q++, p++) {
-		uint8_t c = (*q == '\n') ? '\0' : *q;
-
-		*p = c;
-	}
+	for (q = s.ptr; q < s.ptr + s.sbuf.st_size; q++, p++)
+		*p = (*q == '\n') ? '\0' : *q;
 
 	/* trailer */
 	dbg("writing trailer...\n");

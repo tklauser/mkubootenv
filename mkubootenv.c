@@ -35,12 +35,11 @@
 
 #define DEBUG
 
-#define CMD_NAME		"mkenv"
-#define DEFAULT_IMG_TYPE	"binary"
+#define CMD_NAME		"mkubootenv"
 
 #define CRC32_SIZE		sizeof(uint32_t)
 /* minimum trailing null bytes */
-#define TRAILER_SIZE		sizeof(uint16_t)
+#define TRAILER_SIZE		2
 
 #define err(fmt, args...)	fprintf(stderr, "%s: Error: " fmt, CMD_NAME, ##args)
 #ifdef DEBUG
@@ -65,9 +64,6 @@ static void usage_and_exit(int status)
 	       "  -s <size>  set size of the target image file to <size> bytes. If <size> is\n"
 	       "             bigger than the source file, the target image gets padded with null\n"
 	       "             bytes. If <size> is smaller than the source file, an error is emitted.\n"
-	       "  -t <type>  set type of the target image, where <type> is one of:\n"
-	       "             - binary (default if -t is not specified)\n"
-	       "             - srec\n"
 	       "  -r         reverse operation: get source file from target image file\n");
 	exit(status);
 }
@@ -79,7 +75,6 @@ int main(int argc, char **argv)
 	struct file s, t;	/* source and target file */
 	ssize_t img_size = -1;
 	ssize_t min_img_size;
-	char img_type[7];
 	bool reverse = false;
 	uint8_t *p, *q;
 	uint32_t *crc;
@@ -87,16 +82,11 @@ int main(int argc, char **argv)
 	if (argc < 2)
 		usage_and_exit(EXIT_FAILURE);
 
-	snprintf(img_type, sizeof(img_type), "%s", DEFAULT_IMG_TYPE);
-
 	/* parse commandline options */
 	for (i = 1; (i + 1 < argc) && (argv[i][0] == '-'); i++) {
 		switch (argv[i][1]) {
 		case 's':
 			img_size = strtol(argv[++i], NULL, 10);
-			break;
-		case 't':
-			snprintf(img_type, sizeof(img_type), "%s", argv[++i]);
 			break;
 		case 'r':
 			reverse = true;
@@ -181,10 +171,9 @@ int main(int argc, char **argv)
 		goto err_out_close_t;
 	}
 
-	printf("source file:       %s\n", s.name);
-	printf("target image file: %s\n", t.name);
-	printf("size:              %zd\n", img_size);
-	printf("type:              %s\n", img_type);
+	dbg("source file:       %s\n", s.name);
+	dbg("target image file: %s\n", t.name);
+	dbg("size:              %zd\n", img_size);
 
 	/* CRC32 placeholder, will be filled later */
 	dbg("writing crc...\n");

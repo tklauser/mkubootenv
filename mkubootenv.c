@@ -200,7 +200,10 @@ static void uboot_img_to_env(struct file *s, struct file *t)
 	dbg("target image file (env): %s\n", t->name);
 	dbg("target size:             %zd\n", t->size);
 
-	/* TODO: check CRC */
+	/* check CRC */
+	crc = (uint32_t *) s->ptr;
+	if (*crc != crc32(0, s->ptr + CRC32_SIZE, s->size - CRC32_SIZE))
+		warn("source image with bad CRC\n");
 
 	p = t->ptr;
 	end = s->ptr + CRC32_SIZE + t->size;

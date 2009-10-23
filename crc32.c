@@ -61,14 +61,13 @@ static const uint32_t crc32_table[256] = {
 	0x2d02ef8d
 };
 
-uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
+uint32_t crc32(uint32_t crc, uint8_t *buf, size_t len)
 {
-	unsigned char *end;
+	uint8_t *end;
 
 	crc = ~crc;
-	for (end = buf + len; buf < end; ++buf)
+	for (end = buf + len; buf < end; buf++)
 		crc = crc32_table[(crc ^ *buf) & BIT_MASK(8)] ^ (crc >> 8);
 
 	return ~crc;
 }
-

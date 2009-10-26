@@ -236,13 +236,23 @@ int main(int argc, char **argv)
 	/* parse commandline options */
 	for (i = 1; (i + 1 < argc) && (argv[i][0] == '-'); i++) {
 		switch (argv[i][1]) {
-		case 's':
-			img_size = strtol(argv[++i], NULL, 10);
-			if (img_size <= 0) {
-				err("Invalid target image size: %zd. Must be greater than 0.\n", img_size);
-				exit(EXIT_FAILURE);
+		case 's': {
+			char *opt = argv[++i];
+
+			if (strlen(opt) > 2 && opt[0] == '0' &&
+					(opt[1] == 'x' || opt[1] == 'X')) {
+				img_size = strtol(opt, NULL, 16);
+			} else {
+				img_size = strtol(opt, NULL, 10);
+
+				if (img_size <= 0) {
+					err("Invalid target image size: %zd. Must be greater than 0.\n", img_size);
+					exit(EXIT_FAILURE);
+				}
 			}
+			dbg("img_size: %d\n", img_size);
 			break;
+		}
 		case 'r':
 			reverse = true;
 			break;

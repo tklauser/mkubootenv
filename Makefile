@@ -1,14 +1,16 @@
+prefix = $(HOME)
 
-MKUBOOTENV = mkubootenv
-MKUBOOTENV_OBJS = mkubootenv.o crc32.o
+P	 = mkubootenv
+OBJS	 = mkubootenv.o crc32.o
+WHERE	 = $(prefix)/bin/$(P)
 
-CFLAGS += -W -Wall -Wextra -Wstrict-prototypes -Wsign-compare -Wshadow \
-	  -Wchar-subscripts -Wmissing-declarations -Wmissing-prototypes \
-	  -Wpointer-arith -Wcast-align
+CFLAGS	+= -W -Wall -Wextra -Wstrict-prototypes -Wsign-compare -Wshadow \
+	   -Wchar-subscripts -Wmissing-declarations -Wmissing-prototypes \
+	   -Wpointer-arith -Wcast-align
 
-all: $(MKUBOOTENV)
+all: $(P)
 
-$(MKUBOOTENV): $(MKUBOOTENV_OBJS)
+$(P): $(OBJS)
 	@echo "  LD $@"
 	@$(CC) $(LDFLAGS) -o $@ $^
 
@@ -20,6 +22,14 @@ $(MKUBOOTENV): $(MKUBOOTENV_OBJS)
 	@echo "  CC $@"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+install:
+	@echo "  INSTALL $(WHERE)"
+	@install -m755 -D $(P) $(WHERE)
+
+uninstall:
+	@echo "  UNINSTALL $(WHERE)"
+	@rm -f $(WHERE)
+
 clean:
 	@echo "  CLEAN"
-	@rm -f *.o $(MKUBOOTENV)
+	@rm -f $(OBJS) $(P)

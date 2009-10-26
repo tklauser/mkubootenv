@@ -4,15 +4,12 @@
  * Create a U-Boot environment image suitable for flashing.
  *
  * The input is a text file containing environment variable
- * definitions in the following format (variables separated by
- * newline):
+ * definitions in the format "name=value", separeated by newlines.
  *
- * baudrate=115200
- * bootdelay=5
- * ethaddr=00:15:12:00:00:01
- * kernel_addr=4050000
- * boot_ram=bootm ${kernel_addr}
- * bootcmd=run boot_ram
+ * The "environment" (output) is stored as a list of '\0' terminated
+ * "name=value" strings. The end of the list is marked by a double '\0'.
+ *
+ * The environment is preceeded by a 32 bit CRC over the data part.
  *
  * Copyright (c) 2009, Zurich University of Applied Science
  * Copyright (c) 2009, Tobias Klauser <klto@zhaw.ch>
@@ -48,7 +45,7 @@
 
 #include "crc32.h"
 
-#define DEBUG
+#undef DEBUG
 
 #define CMD_NAME		"mkubootenv"
 
@@ -167,28 +164,23 @@ static void uboot_env_to_img(struct file *s, struct file *t)
 	dbg("target size:             %zd\n", t->size);
 
 	/* CRC32 placeholder, will be filled later */
-	dbg("writing crc dummy...\n");
 	end = t->ptr + CRC32_SIZE;
 	for (p = t->ptr; p < end; p++)
 		*p = 0;
 
 	/* copy the source file, replacing \n by \0 */
-	dbg("writing data...\n");
 	end = s->ptr + s->size;
 	for (q = s->ptr; q < end; q++, p++)
 		*p = (*q == '\n') ? '\0' : *q;
 
 	/* trailer */
-	dbg("writing trailer...\n");
 	end = s->ptr + t->size;
 	for (q = s->ptr + s->size; q < end; q++)
 		*p = 0;
 
 	/* now for the real CRC32 */
-	dbg("calculating crc...\n");
 	crc = (uint32_t *) t->ptr;
 	*crc = crc32(0, t->ptr + CRC32_SIZE, t->size - CRC32_SIZE);
-	dbg("crc: %08x\n", *crc);
 }
 
 static void uboot_img_to_env(struct file *s, struct file *t)
@@ -250,7 +242,6 @@ int main(int argc, char **argv)
 					exit(EXIT_FAILURE);
 				}
 			}
-			dbg("img_size: %d\n", img_size);
 			break;
 		}
 		case 'r':

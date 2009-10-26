@@ -1,0 +1,4 @@
+mkubootenv
+*.o
+*.bin
+*.env

@@ -308,6 +308,9 @@ int main(int argc, char **argv)
 				found_data_end = true;
 		}
 
+		if (!found_data_end)
+			warn("No end of list delimiter found in source file\n");
+
 		/* calculate the plain text file size */
 		t.size = p - (s.ptr + CRC32_SIZE);
 		if (uboot_env_prepare_target(&t))

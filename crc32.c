@@ -3,7 +3,7 @@
 
 #include "crc32.h"
 
-#define BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
+#define BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL << (n)) - 1))
 
 /* Table computed with Mark Adler's makecrc.c utility.  */
 static const uint32_t crc32_table[256] = {

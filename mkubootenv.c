@@ -205,7 +205,7 @@ static void uboot_img_to_env(struct file *s, struct file *t)
 
 static void usage_and_exit(int status)
 {
-	printf("usage: mkenv [-t <type>] [-s <size>] <source file> <target file>\n"
+	printf("usage: mkenv [-s <size>] <source file> <target file>\n"
 	       "  -s <size>  set size of the target image file to <size> bytes. If <size> is\n"
 	       "             bigger than the source file, the target image gets padded with null\n"
 	       "             bytes. If <size> is smaller than the source file, an error is emitted.\n"

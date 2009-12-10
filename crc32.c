@@ -3,8 +3,6 @@
 
 #include "crc32.h"
 
-#define BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL << (n)) - 1))
-
 /* Table computed with Mark Adler's makecrc.c utility.  */
 static const uint32_t crc32_table[256] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419,
@@ -67,7 +65,7 @@ uint32_t crc32(uint32_t crc, uint8_t *buf, size_t len)
 
 	crc = ~crc;
 	for (end = buf + len; buf < end; buf++)
-		crc = crc32_table[(crc ^ *buf) & BIT_MASK(8)] ^ (crc >> 8);
+		crc = crc32_table[(crc ^ *buf) & 0xff] ^ (crc >> 8);
 
 	return ~crc;
 }

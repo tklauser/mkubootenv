@@ -1,0 +1,45 @@
+mkubootenv
+==========
+
+Create an U-Boot environmet image suitable for flashing. The input is a text
+file containing environment variable definitions in the format “name=value”,
+separeated by newlines.
+
+Usage
+-----
+
+usage: mkubootenv [-s <size>] <source file> <target file>
+
+Options:
+  -s <size>  set size of the target image file to <size> bytes. If <size> is
+             bigger than the source file, the target image gets padded with
+	     null bytes. If <size> is smaller than the source file, an error is
+	     emitted.
+  -r         reverse operation: get plaintext env file (target) from binary
+             image file (source)
+
+File formats
+------------
+
+The U-Boot environment is stored in a simple file format, described in
+include/environment.h of the U-Boot source tree as follows:
+
+/**************************************************************************
+ *
+ * The "environment" is stored as a list of '\0' terminated
+ * "name=value" strings. The end of the list is marked by a double
+ * '\0'. New entries are always added at the end. Deleting an entry
+ * shifts the remaining entries to the front. Replacing an entry is a
+ * combination of deleting the old value and adding the new one.
+ *
+ * The environment is preceeded by a 32 bit CRC over the data part.
+ *
+ **************************************************************************
+ */
+
+The input file format for mkubootenv is a simple text file containing
+'name=value' pairs, separated by newlines ('\n'). This means, there are _no
+newlines allowed_ inside the variable names or values.
+
+See the example/ directory for an example input file (uboot_env.env) and its
+corresponding output file (uboot_env.bin).

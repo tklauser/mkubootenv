@@ -11,7 +11,7 @@
  *
  * The environment is preceeded by a 32 bit CRC over the data part.
  *
- * Copyright (c) 2009, Zurich University of Applied Science
+ * Copyright (c) 2009, Zurich University of Applied Sciences
  * Copyright (c) 2009, Tobias Klauser <klto@zhaw.ch>
  *
  * This program is free software; you can redistribute it and/or

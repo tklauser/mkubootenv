@@ -50,6 +50,7 @@
 #define CMD_NAME		"mkubootenv"
 
 #define CRC32_SIZE		sizeof(uint32_t)
+#define FLAG_SIZE		1
 /* minimum trailing null bytes */
 #define TRAILER_SIZE		2
 
@@ -154,10 +155,11 @@ static void uboot_env_cleanup_file(struct file *f)
 		close(f->fd);
 }
 
-static void uboot_env_to_img(struct file *s, struct file *t)
+static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_crc)
 {
 	uint8_t *p, *q, *end;
 	uint32_t *crc;
+	size_t flag_size = 0;
 
 	dbg("source file (env):       %s\n", s->name);
 	dbg("target image file (bin): %s\n", t->name);
@@ -167,6 +169,13 @@ static void uboot_env_to_img(struct file *s, struct file *t)
 	end = t->ptr + CRC32_SIZE;
 	for (p = t->ptr; p < end; p++)
 		*p = 0;
+
+	/* set flags if the redundant environment option is set */
+	if (flags != -1) {
+		*p = (uint8_t) flags;
+		p++;
+		flag_size = FLAG_SIZE;
+	}
 
 	/* copy the source file, replacing \n by \0 */
 	end = s->ptr + s->size;
@@ -179,11 +188,13 @@ static void uboot_env_to_img(struct file *s, struct file *t)
 		*p = 0;
 
 	/* now for the real CRC32 */
-	crc = (uint32_t *) t->ptr;
-	*crc = crc32(0, t->ptr + CRC32_SIZE, t->size - CRC32_SIZE);
+	if (do_crc) {
+		crc = (uint32_t *) t->ptr;
+		*crc = crc32(0, t->ptr + CRC32_SIZE + flag_size, t->size - (CRC32_SIZE + flag_size));
+	}
 }
 
-static void uboot_img_to_env(struct file *s, struct file *t)
+static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flag_size)
 {
 	uint8_t *p, *q, *end;
 	uint32_t *crc;
@@ -194,23 +205,28 @@ static void uboot_img_to_env(struct file *s, struct file *t)
 
 	/* check CRC */
 	crc = (uint32_t *) s->ptr;
-	if (*crc != crc32(0, s->ptr + CRC32_SIZE, s->size - CRC32_SIZE))
+	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flag_size, s->size - (CRC32_SIZE + flag_size)))
 		warn("source image with bad CRC\n");
 
 	p = t->ptr;
-	end = s->ptr + CRC32_SIZE + t->size;
-	for (q = s->ptr + CRC32_SIZE; q < end; p++, q++)
+	end = s->ptr + CRC32_SIZE + flag_size + t->size;
+	for (q = s->ptr + CRC32_SIZE + flag_size; q < end; p++, q++)
 		*p = (*q == '\0') ? '\n' : *q;
 }
 
 static void usage_and_exit(int status)
 {
-	printf("usage: mkubootenv [-s <size>] <source file> <target file>\n"
+	printf("usage: mkubootenv [-s <size>] [-f <flag>] [-n] <source file> <target file>\n"
 	       "  -s <size>  set size of the target image file to <size> bytes. If <size> is\n"
 	       "             bigger than the source file, the target image gets padded with null\n"
 	       "             bytes. If <size> is smaller than the source file, an error is emitted.\n"
+	       "  -f <flag>  set this flag if you are using redundant environments. Set <flag> to 1\n"
+	       "             for active environment or <flag> 0 for obsolete environment. If using\n"
+	       "             reverse operation, the value given with option -f is ignored.\n"
 	       "  -r         reverse operation: get plaintext env file (target) from binary image\n"
-	       "             file (source)\n");
+	       "             file (source)\n"
+	       "  -n         do not calculate CRC32. CRC32 is filled with zeros. For reverse \n"
+	       "             operation, this option is ignored\n");
 	exit(status);
 }
 
@@ -218,8 +234,11 @@ int main(int argc, char **argv)
 {
 	int i;
 	int status = EXIT_FAILURE;
+	int flags = -1;
 	ssize_t img_size = -1;
+	ssize_t flag_size = 0;
 	bool reverse = false;
+	bool do_crc = true;
 	struct file s, t;	/* source and target file */
 
 	if (argc < 2)
@@ -244,8 +263,21 @@ int main(int argc, char **argv)
 			}
 			break;
 		}
+		case 'f': {
+			char *opt = argv[++i];
+			flag_size = FLAG_SIZE;
+			flags = strtoul(opt, NULL, 10);
+			if (flags != 0 && flags != 1) {
+				err("Wrong value for option -f. Should be 0 or 1.\n");
+				usage_and_exit(EXIT_FAILURE);
+			}
+			break;
+		}
 		case 'r':
 			reverse = true;
+			break;
+		case 'n':
+			do_crc = false;
 			break;
 		case 'h':
 			status = EXIT_SUCCESS;
@@ -263,6 +295,12 @@ int main(int argc, char **argv)
 	if (reverse && img_size >= 0)
 		warn("Image size specified in reverse mode will be ignored\n");
 
+	if (reverse && !do_crc)
+		warn("Disabling of CRC generation will be ignored in reverse mode\n");
+
+	if (reverse && flag_size)
+		warn("Flags will be ignored in reverse mode\n");
+
 	uboot_env_init_file(&s);
 	uboot_env_init_file(&t);
 	s.name = argv[i];
@@ -272,7 +310,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 
 	if (!reverse) {
-		ssize_t min_img_size = CRC32_SIZE + s.size + TRAILER_SIZE;
+		ssize_t min_img_size = CRC32_SIZE + flag_size + s.size + TRAILER_SIZE;
 
 		/* TODO: Check source file format:
 		 *	var=value\n
@@ -295,15 +333,15 @@ int main(int argc, char **argv)
 		if (uboot_env_prepare_target(&t))
 			goto cleanup_source;
 
-		uboot_env_to_img(&s, &t);
+		uboot_env_to_img(&s, &t, flags, do_crc);
 	} else {
 		uint8_t *p;
 		uint8_t *end;
 		bool found_data_end = false;
 
 		/* get the length of the data part */
-		end = s.ptr + CRC32_SIZE + s.size;
-		for (p = s.ptr + CRC32_SIZE; (p < end - 1) && (!found_data_end); p++) {
+		end = s.ptr + CRC32_SIZE + flag_size + s.size;
+		for (p = s.ptr + CRC32_SIZE + flag_size; (p < end - 1) && (!found_data_end); p++) {
 			/* two null bytes mark the end of the data section */
 			if (*p == '\0' && *(p + 1) == '\0')
 				found_data_end = true;
@@ -313,11 +351,11 @@ int main(int argc, char **argv)
 			warn("No end of list delimiter found in source file\n");
 
 		/* calculate the plain text file size */
-		t.size = p - (s.ptr + CRC32_SIZE);
+		t.size = p - (s.ptr + CRC32_SIZE + flag_size);
 		if (uboot_env_prepare_target(&t))
 			goto cleanup_source;
 
-		uboot_img_to_env(&s, &t);
+		uboot_img_to_env(&s, &t, flag_size);
 	}
 
 	status = EXIT_SUCCESS;

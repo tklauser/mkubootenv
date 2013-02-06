@@ -40,6 +40,7 @@
 #define CMD_NAME		"mkubootenv"
 
 #define CRC32_SIZE		sizeof(uint32_t)
+/* space for active/obsolete flags in redundant environment */
 #define FLAGS_SIZE		1
 /* minimum trailing null bytes */
 #define TRAILER_SIZE		2
@@ -145,11 +146,10 @@ static void uboot_env_cleanup_file(struct file *f)
 		close(f->fd);
 }
 
-static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_crc)
+static void uboot_env_to_img(struct file *s, struct file *t, uint8_t flags,
+			     size_t flags_size, bool do_crc)
 {
 	uint8_t *p, *q, *end;
-	uint32_t *crc;
-	size_t flags_size = 0;
 
 	dbg("source file (env):       %s\n", s->name);
 	dbg("target image file (bin): %s\n", t->name);
@@ -161,10 +161,9 @@ static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_
 		*p = 0;
 
 	/* set flags if the redundant environment option is set */
-	if (flags != -1) {
-		*p = (uint8_t) flags;
+	if (flags_size > 0) {
+		*p = flags;
 		p++;
-		flags_size = FLAGS_SIZE;
 	}
 
 	/* copy the source file, replacing \n by \0 */
@@ -179,12 +178,12 @@ static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_
 
 	/* now for the real CRC32 */
 	if (do_crc) {
-		crc = (uint32_t *) t->ptr;
+		uint32_t *crc = (uint32_t *) t->ptr;
 		*crc = crc32(0, t->ptr + CRC32_SIZE + flags_size, t->size - (CRC32_SIZE + flags_size));
 	}
 }
 
-static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flags_size)
+static void uboot_img_to_env(struct file *s, struct file *t, size_t flags_size)
 {
 	uint8_t *p, *q, *end;
 	uint32_t *crc;
@@ -195,8 +194,8 @@ static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flags_size)
 
 	/* check CRC */
 	crc = (uint32_t *) s->ptr;
-	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - (CRC32_SIZE + flags_size)))
-		warn("source image with bad CRC\n");
+	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - CRC32_SIZE - flags_size))
+		warn("source image with bad CRC.\n");
 
 	p = t->ptr;
 	end = s->ptr + CRC32_SIZE + flags_size + t->size;
@@ -224,9 +223,9 @@ int main(int argc, char **argv)
 {
 	int i;
 	int status = EXIT_FAILURE;
-	int flags = -1;
-	ssize_t img_size = -1;
-	ssize_t flags_size = 0;
+	unsigned long flags = 0;
+	size_t img_size = 0;
+	size_t flags_size = 0;
 	bool reverse = false;
 	bool do_crc = true;
 	struct file s, t;	/* source and target file */
@@ -244,12 +243,12 @@ int main(int argc, char **argv)
 					(opt[1] == 'x' || opt[1] == 'X')) {
 				img_size = strtol(opt, NULL, 16);
 			} else {
-				img_size = strtol(opt, NULL, 10);
+				img_size = strtoul(opt, NULL, 10);
+			}
 
-				if (img_size <= 0) {
-					err("Invalid target image size: %zd. Must be greater than 0.\n", img_size);
-					exit(EXIT_FAILURE);
-				}
+			if (img_size == 0) {
+				err("Invalid target image size: %zu. Must be greater than 0.\n", img_size);
+				exit(EXIT_FAILURE);
 			}
 			break;
 		}
@@ -282,14 +281,14 @@ int main(int argc, char **argv)
 	if (i + 2 > argc)
 		usage_and_exit(EXIT_FAILURE);
 
-	if (reverse && img_size >= 0)
+	if (reverse && img_size > 0)
 		warn("Image size specified in reverse mode will be ignored\n");
 
 	if (reverse && !do_crc)
 		warn("Disabling of CRC generation will be ignored in reverse mode\n");
 
 	if (reverse && flags_size)
-		warn("Flags will be ignored in reverse mode\n");
+		warn("Flags option will be ignored in reverse mode\n");
 
 	uboot_env_init_file(&s);
 	uboot_env_init_file(&t);
@@ -300,7 +299,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 
 	if (!reverse) {
-		ssize_t min_img_size = CRC32_SIZE + flags_size + s.size + TRAILER_SIZE;
+		size_t min_img_size = CRC32_SIZE + flags_size + s.size + TRAILER_SIZE;
 
 		/* TODO: Check source file format:
 		 *	var=value\n
@@ -310,12 +309,12 @@ int main(int argc, char **argv)
 		 * check whether the size hasn't been set or whether the source file +
 		 * CRC + trailer fits into the specified size.
 		 */
-		if (img_size < 0)
+		if (img_size == 0)
 			img_size = min_img_size;
 		else if (img_size < min_img_size) {
-			err("Specified size (%zd) is too small for the source file to "
-					"fit into. Must be at least %zd bytes.\n",
-					img_size, min_img_size);
+			err("Specified size (%zu) is too small for the source"
+			    "file to fit into. Must be at least %zu bytes.\n",
+			    img_size, min_img_size);
 			goto cleanup_source;
 		}
 
@@ -323,7 +322,7 @@ int main(int argc, char **argv)
 		if (uboot_env_prepare_target(&t))
 			goto cleanup_source;
 
-		uboot_env_to_img(&s, &t, flags, do_crc);
+		uboot_env_to_img(&s, &t, flags, flags_size, do_crc);
 	} else {
 		uint8_t *p;
 		uint8_t *end;

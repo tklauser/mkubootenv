@@ -5,6 +5,12 @@ Create an U-Boot environmet image suitable for flashing. The input is a text
 file containing environment variable definitions in the format “name=value”,
 separeated by newlines.
 
+The output) is stored as a list of "name=value" strings, where each of the the
+strings is terminated by a NULL byte ('\0'). The end of the list is marked by a
+double NULL byte.
+
+The environment is preceeded by a 32 bit CRC over the list of strings.
+
 Usage
 -----
 

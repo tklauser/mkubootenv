@@ -1,18 +1,8 @@
 /*
- * mkubootenv.c
- *
- * Create a U-Boot environment image suitable for flashing.
- *
- * The input is a text file containing environment variable
- * definitions in the format "name=value", separeated by newlines.
- *
- * The "environment" (output) is stored as a list of '\0' terminated
- * "name=value" strings. The end of the list is marked by a double '\0'.
- *
- * The environment is preceeded by a 32 bit CRC over the data part.
+ * mkubootenv -- Create an U-Boot environment image suitable for flashing.
  *
  * Copyright (c) 2009, Zurich University of Applied Sciences
- * Copyright (c) 2009, Tobias Klauser <klto@zhaw.ch>
+ * Copyright (c) 2009-2013, Tobias Klauser <tklauser@distanz.ch>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

@@ -40,7 +40,7 @@
 #define CMD_NAME		"mkubootenv"
 
 #define CRC32_SIZE		sizeof(uint32_t)
-#define FLAG_SIZE		1
+#define FLAGS_SIZE		1
 /* minimum trailing null bytes */
 #define TRAILER_SIZE		2
 
@@ -149,7 +149,7 @@ static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_
 {
 	uint8_t *p, *q, *end;
 	uint32_t *crc;
-	size_t flag_size = 0;
+	size_t flags_size = 0;
 
 	dbg("source file (env):       %s\n", s->name);
 	dbg("target image file (bin): %s\n", t->name);
@@ -164,7 +164,7 @@ static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_
 	if (flags != -1) {
 		*p = (uint8_t) flags;
 		p++;
-		flag_size = FLAG_SIZE;
+		flags_size = FLAGS_SIZE;
 	}
 
 	/* copy the source file, replacing \n by \0 */
@@ -180,11 +180,11 @@ static void uboot_env_to_img(struct file *s, struct file *t, int flags, bool do_
 	/* now for the real CRC32 */
 	if (do_crc) {
 		crc = (uint32_t *) t->ptr;
-		*crc = crc32(0, t->ptr + CRC32_SIZE + flag_size, t->size - (CRC32_SIZE + flag_size));
+		*crc = crc32(0, t->ptr + CRC32_SIZE + flags_size, t->size - (CRC32_SIZE + flags_size));
 	}
 }
 
-static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flag_size)
+static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flags_size)
 {
 	uint8_t *p, *q, *end;
 	uint32_t *crc;
@@ -195,12 +195,12 @@ static void uboot_img_to_env(struct file *s, struct file *t, ssize_t flag_size)
 
 	/* check CRC */
 	crc = (uint32_t *) s->ptr;
-	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flag_size, s->size - (CRC32_SIZE + flag_size)))
+	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - (CRC32_SIZE + flags_size)))
 		warn("source image with bad CRC\n");
 
 	p = t->ptr;
-	end = s->ptr + CRC32_SIZE + flag_size + t->size;
-	for (q = s->ptr + CRC32_SIZE + flag_size; q < end; p++, q++)
+	end = s->ptr + CRC32_SIZE + flags_size + t->size;
+	for (q = s->ptr + CRC32_SIZE + flags_size; q < end; p++, q++)
 		*p = (*q == '\0') ? '\n' : *q;
 }
 
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
 	int status = EXIT_FAILURE;
 	int flags = -1;
 	ssize_t img_size = -1;
-	ssize_t flag_size = 0;
+	ssize_t flags_size = 0;
 	bool reverse = false;
 	bool do_crc = true;
 	struct file s, t;	/* source and target file */
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
 		}
 		case 'f': {
 			char *opt = argv[++i];
-			flag_size = FLAG_SIZE;
+			flags_size = FLAGS_SIZE;
 			flags = strtoul(opt, NULL, 10);
 			if (flags != 0 && flags != 1) {
 				err("Wrong value for option -f. Should be 0 or 1.\n");
@@ -288,7 +288,7 @@ int main(int argc, char **argv)
 	if (reverse && !do_crc)
 		warn("Disabling of CRC generation will be ignored in reverse mode\n");
 
-	if (reverse && flag_size)
+	if (reverse && flags_size)
 		warn("Flags will be ignored in reverse mode\n");
 
 	uboot_env_init_file(&s);
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 
 	if (!reverse) {
-		ssize_t min_img_size = CRC32_SIZE + flag_size + s.size + TRAILER_SIZE;
+		ssize_t min_img_size = CRC32_SIZE + flags_size + s.size + TRAILER_SIZE;
 
 		/* TODO: Check source file format:
 		 *	var=value\n
@@ -330,8 +330,8 @@ int main(int argc, char **argv)
 		bool found_data_end = false;
 
 		/* get the length of the data part */
-		end = s.ptr + CRC32_SIZE + flag_size + s.size;
-		for (p = s.ptr + CRC32_SIZE + flag_size; (p < end - 1) && (!found_data_end); p++) {
+		end = s.ptr + CRC32_SIZE + flags_size + s.size;
+		for (p = s.ptr + CRC32_SIZE + flags_size; (p < end - 1) && (!found_data_end); p++) {
 			/* two null bytes mark the end of the data section */
 			if (*p == '\0' && *(p + 1) == '\0')
 				found_data_end = true;
@@ -341,11 +341,11 @@ int main(int argc, char **argv)
 			warn("No end of list delimiter found in source file\n");
 
 		/* calculate the plain text file size */
-		t.size = p - (s.ptr + CRC32_SIZE + flag_size);
+		t.size = p - (s.ptr + CRC32_SIZE + flags_size);
 		if (uboot_env_prepare_target(&t))
 			goto cleanup_source;
 
-		uboot_img_to_env(&s, &t, flag_size);
+		uboot_img_to_env(&s, &t, flags_size);
 	}
 
 	status = EXIT_SUCCESS;

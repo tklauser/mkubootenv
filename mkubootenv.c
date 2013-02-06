@@ -183,24 +183,53 @@ static void uboot_env_to_img(struct file *s, struct file *t, uint8_t flags,
 	}
 }
 
-static void uboot_img_to_env(struct file *s, struct file *t, size_t flags_size)
+static int uboot_img_to_env(struct file *s, struct file *t)
 {
 	uint8_t *p, *q, *end;
-	uint32_t *crc;
+	uint32_t img_crc, crc;
+	size_t flags_size = 0;
+	bool found_data_end = false;
 
 	dbg("source file (bin):       %s\n", s->name);
+	dbg("source size:             %zd\n", s->size);
+
+	/* check CRC without flag */
+	img_crc = *((uint32_t *) s->ptr);
+	crc = crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - CRC32_SIZE - flags_size);
+	if (img_crc != crc) {
+		flags_size = 1;
+		crc = crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - CRC32_SIZE - flags_size);
+		if (img_crc != crc)
+			warn("source image with bad CRC.\n");
+	}
+
+	/* get the length of the data part */
+	end = s->ptr + s->size;
+	for (p = s->ptr + CRC32_SIZE + flags_size; (p < end - 1) && !found_data_end; p++) {
+		/* two null bytes mark the end of the data section */
+		if (*p == '\0' && *(p + 1) == '\0')
+			found_data_end = true;
+	}
+
+	if (!found_data_end)
+		warn("No end of list delimiter found in source file\n");
+
+	t->size = p - (s->ptr + CRC32_SIZE + flags_size);
+	/* don't copy the ending 2 NULL bytes */
+	if (found_data_end)
+		t->size--;
+	if (uboot_env_prepare_target(t))
+		return -1;
+
 	dbg("target image file (env): %s\n", t->name);
 	dbg("target size:             %zd\n", t->size);
-
-	/* check CRC */
-	crc = (uint32_t *) s->ptr;
-	if (*crc != crc32(0, s->ptr + CRC32_SIZE + flags_size, s->size - CRC32_SIZE - flags_size))
-		warn("source image with bad CRC.\n");
 
 	p = t->ptr;
 	end = s->ptr + CRC32_SIZE + flags_size + t->size;
 	for (q = s->ptr + CRC32_SIZE + flags_size; q < end; p++, q++)
 		*p = (*q == '\0') ? '\n' : *q;
+
+	return 0;
 }
 
 static void usage_and_exit(int status)
@@ -324,27 +353,8 @@ int main(int argc, char **argv)
 
 		uboot_env_to_img(&s, &t, flags, flags_size, do_crc);
 	} else {
-		uint8_t *p;
-		uint8_t *end;
-		bool found_data_end = false;
-
-		/* get the length of the data part */
-		end = s.ptr + CRC32_SIZE + flags_size + s.size;
-		for (p = s.ptr + CRC32_SIZE + flags_size; (p < end - 1) && (!found_data_end); p++) {
-			/* two null bytes mark the end of the data section */
-			if (*p == '\0' && *(p + 1) == '\0')
-				found_data_end = true;
-		}
-
-		if (!found_data_end)
-			warn("No end of list delimiter found in source file\n");
-
-		/* calculate the plain text file size */
-		t.size = p - (s.ptr + CRC32_SIZE + flags_size);
-		if (uboot_env_prepare_target(&t))
+		if (uboot_img_to_env(&s, &t))
 			goto cleanup_source;
-
-		uboot_img_to_env(&s, &t, flags_size);
 	}
 
 	status = EXIT_SUCCESS;
